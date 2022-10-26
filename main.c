@@ -1,396 +1,590 @@
-#include "backprop.h"
-#include "layer.h"
-#include "neuron.h"
+#include <stdio.h>
+#include <stdbool.h>
+#include <math.h>
+#include <stdlib.h>
 
 
-layer *lay = NULL;
-int num_layers;
-int *num_neurons;
-float alpha;
-float *cost;
-float full_cost;
-float **input;
-float **desired_outputs;
-int num_training_ex;
-int n=1;
+#define R(piece) "\033[31m"#piece"\033[0m"//红色棋子
+//#define B(piece) "\033[30m"#piece"\033[0m"//黑色棋子
+#define B(piece) "\033[34m"#piece"\033[0m"//藍色棋子
+#define CROSS "\033[33m十\033[0m"
 
-int main(void)
+//定義外部變量,棋盤座標
+char* array[9][9];
+int xi,yi;//要移动的棋子
+int xj,yj;//移動的目標位置
+bool isStandard = 1;//是否符合規則，初始值1，符合
+bool gameOverSign = 1;//遊戲是否结束，0结束
+bool restart = 0;
+//生成棋盤
+void chessboardBuilding();
+//打印棋盤
+void printChessboard();
+//判斷是红棋還是黑棋,红棋返回1,黑棋返回-1,否則返回0
+int redOrBlack(int x,int y);
+//红棋移動
+void redMove();
+//藍棋移動
+void blackMove();
+//每種棋子的規則
+void rulesOfAllKindsOfChessPieces();
+//判斷遊戲結束
+void isGameOver();
+
+//**************************主函數******************************
+int main()
 {
-    int i;
-
-    srand(time(0));
-
-    printf("Enter the number of Layers in Neural Network:\n");
-    scanf("%d",&num_layers);
-
-    num_neurons = (int*) malloc(num_layers * sizeof(int));
-    memset(num_neurons,0,num_layers *sizeof(int));
-
-    // Get number of neurons per layer
-    for(i=0;i<num_layers;i++)
+    //生成棋盤
+    chessboardBuilding();
+    //打印棋盤
+    printChessboard();
+    //開始下棋
+    int turn = -1;
+    while (gameOverSign) 
     {
-        printf("Enter number of neurons in layer[%d]: \n",i+1);
-        scanf("%d",&num_neurons[i]);
-    }
-
-    printf("\n");
-
-    // Initialize the neural network module
-    if(init()!= SUCCESS_INIT)
-    {
-        printf("Error in Initialization...\n");
-        exit(0);
-    }
-
-    printf("Enter the learning rate (Usually 0.15): \n");
-    scanf("%f",&alpha);
-    printf("\n");
-
-    printf("Enter the number of training examples: \n");
-    scanf("%d",&num_training_ex);
-    printf("\n");
-
-    input = (float**) malloc(num_training_ex * sizeof(float*));
-    for(i=0;i<num_training_ex;i++)
-    {
-        input[i] = (float*)malloc(num_neurons[0] * sizeof(float));
-    }
-
-    desired_outputs = (float**) malloc(num_training_ex* sizeof(float*));
-    for(i=0;i<num_training_ex;i++)
-    {
-        desired_outputs[i] = (float*)malloc(num_neurons[num_layers-1] * sizeof(float));
-    }
-
-    cost = (float *) malloc(num_neurons[num_layers-1] * sizeof(float));
-    memset(cost,0,num_neurons[num_layers-1]*sizeof(float));
-
-    // Get Training Examples
-    get_inputs();
-
-    // Get Output Labels
-    get_desired_outputs();
-
-    train_neural_net();
-    test_nn();
-
-    if(dinit()!= SUCCESS_DINIT)
-    {
-        printf("Error in Dinitialization...\n");
-    }
-
-    return 0;
-}
-
-
-int init()
-{
-    if(create_architecture() != SUCCESS_CREATE_ARCHITECTURE)
-    {
-        printf("Error in creating architecture...\n");
-        return ERR_INIT;
-    }
-
-    printf("Neural Network Created Successfully...\n\n");
-    return SUCCESS_INIT;
-}
-
-//Get Inputs
-void  get_inputs()
-{
-    int i,j;
-
-        for(i=0;i<num_training_ex;i++)
+        isStandard = 1;
+        turn *= (-1);//交替下棋
+        switch (turn) 
         {
-            printf("Enter the Inputs for training example[%d]:\n",i);
-
-            for(j=0;j<num_neurons[0];j++)
-            {
-                scanf("%f",&input[i][j]);
-                
-            }
-            printf("\n");
+            case 1:
+                redMove();
+                turn = (restart) ? (turn*-1) : turn;
+                break;
+            case -1:
+                blackMove();
+                turn = (restart) ? (turn*-1) : turn;
+                break;
         }
-}
-
-//Get Labels
-void get_desired_outputs()
-{
-    int i,j;
+        isGameOver();
+        
+    }
+    printf("遊戲结束!\n");
     
-    for(i=0;i<num_training_ex;i++)
-    {
-        for(j=0;j<num_neurons[num_layers-1];j++)
-        {
-            printf("Enter the Desired Outputs (Labels) for training example[%d]: \n",i);
-            scanf("%f",&desired_outputs[i][j]);
-            printf("\n");
+  
+    
+}//主函式
+
+
+//*************************自定義函數*****************************
+
+//生成棋盤
+void chessboardBuilding()
+{
+    for (int i = 0; i < 9; i ++) {
+        for (int j = 0; j < 9 ; j ++) {
+            array[i][j] = CROSS;
         }
+        printf("\n");
     }
+    
+    
+    //布置红棋
+    array[0][0] = array[0][8] = R(香);
+    array[0][1] = array[0][7] = R(桂);
+    array[0][2] = array[0][6] = R(銀);
+    array[0][3] = array[0][5] = R(金);
+    array[0][4] = R(王);
+    array[1][1] = R(飛);
+    array[1][7] = R(角);
+    array[2][0] = array[2][1] = array[2][2] = array[2][3] = array[2][4] = array[2][5] = array[2][6] = array[2][7] = array[2][8] = R(步);
+    
+    //布置黑棋
+    array[8][0] = array[8][8] = B(香);
+    array[8][1] = array[8][7] = B(桂);
+    array[8][2] = array[8][6] = B(銀);
+    array[8][3] = array[8][5] = B(金);
+    array[8][4] = B(王);
+    array[7][1] = B(角);
+    array[7][7] = B(飛);
+    array[6][0] = array[6][1] = array[6][2] = array[6][3] = array[6][4] = array[6][5] = array[6][6] = array[6][7] = array[6][8] = B(步);
 }
 
-// Feed inputs to input layer
-void feed_input(int i)
+//打印棋盤
+void printChessboard()
 {
-    int j;
-
-    for(j=0;j<num_neurons[0];j++)
-    {
-        lay[0].neu[j].actv = input[i][j];
-        printf("Input: %f\n",lay[0].neu[j].actv);
-    }
-}
-
-// Create Neural Network Architecture
-int create_architecture()
-{
-    int i=0,j=0;
-    lay = (layer*) malloc(num_layers * sizeof(layer));
-
-    for(i=0;i<num_layers;i++)
-    {
-        lay[i] = create_layer(num_neurons[i]);      
-        lay[i].num_neu = num_neurons[i];
-        printf("Created Layer: %d\n", i+1);
-        printf("Number of Neurons in Layer %d: %d\n", i+1,lay[i].num_neu);
-
-        for(j=0;j<num_neurons[i];j++)
-        {
-            if(i < (num_layers-1)) 
-            {
-                lay[i].neu[j] = create_neuron(num_neurons[i+1]);
-            }
-
-            printf("Neuron %d in Layer %d created\n",j+1,i+1);  
+	system("clear");
+    
+    //顯示
+    printf("  \033[43;30 日日本將棋\033[0m\n\n");
+    for (int i = 0; i < 9;  i ++) {
+        for (int j = 0; j < 9; j ++) {
+            printf("%s",array[i][j]);
         }
         printf("\n");
     }
 
-    printf("\n");
-
-    // Initialize the weights
-    if(initialize_weights() != SUCCESS_INIT_WEIGHTS)
-    {
-        printf("Error Initilizing weights...\n");
-        return ERR_CREATE_ARCHITECTURE;
-    }
-
-    return SUCCESS_CREATE_ARCHITECTURE;
 }
 
-int initialize_weights(void)
+//判斷紅黑棋 紅棋等於1 黑棋等於-1
+int redOrBlack(int x,int y)
 {
-    int i,j,k;
-
-    if(lay == NULL)
+    if (array[x][y] == R(香) || array[x][y] == R(桂) || array[x][y] == R(銀) || array[x][y] == R(桂) || array[x][y] == R(王) || array[x][y] == R(飛) || array[x][y] == R(角) || array[x][y] == R(步))
     {
-        printf("No layers in Neural Network...\n");
-        return ERR_INIT_WEIGHTS;
+        return  1;
+    }
+    else if (array[x][y] == B(香) || array[x][y] == B(桂) || array[x][y] == B(銀) || array[x][y] == B(金) || array[x][y] == B(王) || array[x][y] == B(飛) || array[x][y] == R(角) || array[x][y] == B(步))
+    {
+        return -1;
+    }
+    else
+        return 0;
+}
+
+//红棋移動
+void redMove()
+{
+    if (restart) {
+        printf("違反遊戲規則，請重新輸入\n");
+        restart = 0;
+    }
+    printf("[红棋]請输入你要移動的棋子:\n");
+    scanf("%d %d",&xi,&yi);
+    printf("[红棋]請输入你要放置的位置:\n");
+    scanf("%d %d",&xj,&yj);
+    rulesOfAllKindsOfChessPieces();
+    printChessboard();
+}
+
+//黑棋移動
+void blackMove()
+{
+    if (restart) {
+        printf("違反遊戲規則，請重新输入\n");
+        restart = 0;
+    }
+    printf("[黑棋]請输入你要移動的棋子:\n");
+    scanf("%d %d",&xi,&yi);
+    printf("[黑棋]請输入你要放置的位置:\n");
+    scanf("%d %d",&xj,&yj);
+    rulesOfAllKindsOfChessPieces();
+    printChessboard();
+}
+
+//判斷遊戲結束
+void isGameOver()
+{
+    bool sign_r = 0;
+    bool sign_b = 0;
+    for (int i = 0; i < 9; i ++) {
+        for (int j = 0; j < 9; j ++) {
+            if (array[i][j] == R(王)) {
+                sign_r = 1;
+            }
+            else if (array[i][j] == B(王))
+            {
+                sign_b = 1;
+            }
+        }
+    }
+    if ((sign_r == 0)||(sign_b == 0)) {
+        gameOverSign = 0;
+    }
+}
+
+//每種棋規定
+void rulesOfAllKindsOfChessPieces()
+{
+//R（香）----------------------------------------
+    if (array[xi][yi] == R(香))
+    {
+        if (yi == yj)//列座標不變，同列移動
+        {
+            for (int i = xi+1; i < xj; i ++)
+            {
+                if (array[i][yi] != CROSS)
+                    isStandard = 0;//如果初始位置和目标位置之间有棋子，则不符合规则
+            }
+            for (int i = xi-1; i > xj; i --)
+            {
+                if (array[i][yi] != CROSS)
+                    isStandard = 0;
+            }
+        }
+        else if (xi == xj)//行座標不變，同行移動
+        {
+            for (int i = yi+1; i < yj; i ++)
+                if (array[xi][i] != CROSS)
+                    isStandard = 0;
+            for (int i = yi-1; i > yj; i --)
+                if (array[xi][i] != CROSS)
+                    isStandard = 0;
+        }
+        
+        if ((xi == xj || yi == yj)&& isStandard && (redOrBlack(xj, yj) != 1))//如果棋子直行、没有犯規且落點不是红棋，可移動
+        {
+            
+            array[xi][yi] = CROSS;
+            array[xj][yj] = R(香);
+        }
+        else
+        {
+            restart = 1;
+        }
     }
 
-    printf("Initializing weights...\n");
-
-    for(i=0;i<num_layers-1;i++)
+//B（香）----------------------------------------
+    else if (array[xi][yi] == B(香))
     {
         
-        for(j=0;j<num_neurons[i];j++)
+        if (yi == yj)///列座標不變，同列移動
         {
-            for(k=0;k<num_neurons[i+1];k++)
+            for (int i = xi+1; i < xj; i ++)
             {
-                // Initialize Output Weights for each neuron
-                lay[i].neu[j].out_weights[k] = ((double)rand())/((double)RAND_MAX);
-                printf("%d:w[%d][%d]: %f\n",k,i,j, lay[i].neu[j].out_weights[k]);
-                lay[i].neu[j].dw[k] = 0.0;
+                if (array[i][yi] != CROSS)
+                    isStandard = 0;//如果初始位置和目標位置之間有棋子，则不符合規則
             }
-
-            if(i>0) 
+            for (int i = xi-1; i > xj; i --)
             {
-                lay[i].neu[j].bias = ((double)rand())/((double)RAND_MAX);
+                if (array[i][yi] != CROSS)
+                    isStandard = 0;
             }
         }
-    }   
-    printf("\n");
+        else if (xi == xj)//行座標不變，同行移動
+        {
+            for (int i = yi+1; i < yj; i ++)
+                if (array[xi][i] != CROSS)
+                    isStandard = 0;
+            for (int i = yi-1; i > yj; i --)
+                if (array[xi][i] != CROSS)
+                    isStandard = 0;
+        }
+        if ((xi == xj || yi == yj)&& isStandard && redOrBlack(xj, yj) != -1)///如果棋子直行、没有犯規且落點不黑棋，可移動
+        {
+            array[xi][yi] = CROSS;
+            array[xj][yj] = B(香);
+        }
+        else
+        {
+            restart = 1;
+        }
+    }
+
+//R（桂）----------------------------------------
+    else if (array[xi][yi] == R(桂))
+    {
+        if ((xj == xi+2 && yj == yi-1 ) || (xj == xi+2 && yj == yi+1 ) && isStandard && redOrBlack(xj, yj) != -1)
+        {
+            array[xi][yi] = CROSS;
+            array[xj][yj] = R(桂);
+        }
+        else
+        {
+            restart = 1;
+        }
+    }
     
-    for (j=0; j<num_neurons[num_layers-1]; j++)
+//B（桂）----------------------------------------
+    else if (array[xi][yi] == B(桂))
     {
-        lay[num_layers-1].neu[j].bias = ((double)rand())/((double)RAND_MAX);
-    }
-
-    return SUCCESS_INIT_WEIGHTS;
-}
-
-// Train Neural Network
-void train_neural_net(void)
-{
-    int i;
-    int it=0;
-
-    // Gradient Descent
-    for(it=0;it<20000;it++)
-    {
-        for(i=0;i<num_training_ex;i++)
+        if ((xj == xi-2 && yj == yi-1 || (xj == xi-2 && yj == yi+1 ) && isStandard && redOrBlack(xj, yj) != 1))
         {
-            feed_input(i);
-            forward_prop();
-            compute_cost(i);
-            back_prop(i);
-            update_weights();
+            array[xi][yi] = CROSS;
+            array[xj][yj] = B(桂);
         }
-    }
-}
-
-
-
-void update_weights(void)
-{
-    int i,j,k;
-
-    for(i=0;i<num_layers-1;i++)
-    {
-        for(j=0;j<num_neurons[i];j++)
+        else
         {
-            for(k=0;k<num_neurons[i+1];k++)
-            {
-                // Update Weights
-                lay[i].neu[j].out_weights[k] = (lay[i].neu[j].out_weights[k]) - (alpha * lay[i].neu[j].dw[k]);
-            }
-            
-            // Update Bias
-            lay[i].neu[j].bias = lay[i].neu[j].bias - (alpha * lay[i].neu[j].dbias);
-        }
-    }   
-}
-
-void forward_prop(void)
-{
-    int i,j,k;
-
-    for(i=1;i<num_layers;i++)
-    {   
-        for(j=0;j<num_neurons[i];j++)
-        {
-            lay[i].neu[j].z = lay[i].neu[j].bias;
-
-            for(k=0;k<num_neurons[i-1];k++)
-            {
-                lay[i].neu[j].z  = lay[i].neu[j].z + ((lay[i-1].neu[k].out_weights[j])* (lay[i-1].neu[k].actv));
-            }
-
-            // Relu Activation Function for Hidden Layers
-            if(i < num_layers-1)
-            {
-                if((lay[i].neu[j].z) < 0)
-                {
-                    lay[i].neu[j].actv = 0;
-                }
-
-                else
-                {
-                    lay[i].neu[j].actv = lay[i].neu[j].z;
-                }
-            }
-            
-            // Sigmoid Activation function for Output Layer
-            else
-            {
-                lay[i].neu[j].actv = 1/(1+exp(-lay[i].neu[j].z));
-                printf("Output: %d\n", (int)round(lay[i].neu[j].actv));
-                printf("\n");
-            }
+            restart = 1;
         }
     }
-}
-
-// Compute Total Cost
-void compute_cost(int i)
-{
-    int j;
-    float tmpcost=0;
-    float tcost=0;
-
-    for(j=0;j<num_neurons[num_layers-1];j++)
+    
+//R（飛）----------------------------------------
+    else if (array[xi][yi] == R(飛))
     {
-        tmpcost = desired_outputs[i][j] - lay[num_layers-1].neu[j].actv;
-        cost[j] = (tmpcost * tmpcost)/2;
-        tcost = tcost + cost[j];
-    }   
-
-    full_cost = (full_cost + tcost)/n;
-    n++;
-    // printf("Full Cost: %f\n",full_cost);
-}
-
-// Back Propogate Error
-void back_prop(int p)
-{
-    int i,j,k;
-
-    // Output Layer
-    for(j=0;j<num_neurons[num_layers-1];j++)
-    {           
-        lay[num_layers-1].neu[j].dz = (lay[num_layers-1].neu[j].actv - desired_outputs[p][j]) * (lay[num_layers-1].neu[j].actv) * (1- lay[num_layers-1].neu[j].actv);
-
-        for(k=0;k<num_neurons[num_layers-2];k++)
-        {   
-            lay[num_layers-2].neu[k].dw[j] = (lay[num_layers-1].neu[j].dz * lay[num_layers-2].neu[k].actv);
-            lay[num_layers-2].neu[k].dactv = lay[num_layers-2].neu[k].out_weights[j] * lay[num_layers-1].neu[j].dz;
-        }
-            
-        lay[num_layers-1].neu[j].dbias = lay[num_layers-1].neu[j].dz;           
-    }
-
-    // Hidden Layers
-    for(i=num_layers-2;i>0;i--)
-    {
-        for(j=0;j<num_neurons[i];j++)
+        if (yi == yj)//列坐标不变，同列移动
         {
-            if(lay[i].neu[j].z >= 0)
+            for (int i = xi+1; i < xj; i ++)
             {
-                lay[i].neu[j].dz = lay[i].neu[j].dactv;
+                if (array[i][yi] != CROSS)
+                    isStandard = 0;//如果初始位置和目标位置之间有棋子，则不符合规则
             }
-            else
+            for (int i = xi-1; i > xj; i --)
             {
-                lay[i].neu[j].dz = 0;
+                if (array[i][yi] != CROSS)
+                    isStandard = 0;
             }
-
-            for(k=0;k<num_neurons[i-1];k++)
-            {
-                lay[i-1].neu[k].dw[j] = lay[i].neu[j].dz * lay[i-1].neu[k].actv;    
-                
-                if(i>1)
-                {
-                    lay[i-1].neu[k].dactv = lay[i-1].neu[k].out_weights[j] * lay[i].neu[j].dz;
-                }
-            }
-
-            lay[i].neu[j].dbias = lay[i].neu[j].dz;
         }
-    }
-}
-
-// Test the trained network
-void test_nn(void) 
-{
-    int i;
-    while(1)
-    {
-        printf("Enter input to test:\n");
-
-        for(i=0;i<num_neurons[0];i++)
+        else if (xi == xj)//行坐标不变，同行移动
         {
-            scanf("%f",&lay[0].neu[i].actv);
+            for (int i = yi+1; i < yj; i ++)
+                if (array[xi][i] != CROSS)
+                    isStandard = 0;
+            for (int i = yi-1; i > yj; i --)
+                if (array[xi][i] != CROSS)
+                    isStandard = 0;
         }
-        forward_prop();
+        if ((xi == xj || yi == yj)&& isStandard && redOrBlack(xj, yj) != -1)//如果棋子直行、没有犯规且落点不是红棋，可以移动
+        {
+            array[xi][yi] = CROSS;
+            array[xj][yj] = B(香);
+        }
+        else
+        {
+            restart = 1;
+        }
     }
-}
+    
+//B（飛）----------------------------------------
+    else if (array[xi][yi] == B(飛))
+    {
+        if (yi == yj)//列坐标不变，同列移动
+        {
+            for (int i = xi+1; i < xj; i ++)
+            {
+                if (array[i][yi] != CROSS)
+                    isStandard = 0;//如果初始位置和目标位置之间有棋子，则不符合规则
+            }
+            for (int i = xi-1; i > xj; i --)
+            {
+                if (array[i][yi] != CROSS)
+                    isStandard = 0;
+            }
+        }
+        else if (xi == xj)//行坐标不变，同行移动
+        {
+            for (int i = yi+1; i < yj; i ++)
+                if (array[xi][i] != CROSS)
+                    isStandard = 0;
+            for (int i = yi-1; i > yj; i --)
+                if (array[xi][i] != CROSS)
+                    isStandard = 0;
+        }
+        if ((xi == xj || yi == yj)&& isStandard && redOrBlack(xj, yj) != -1)//如果棋子直行、没有犯规且落点不是红棋，可以移动
+        {
+            array[xi][yi] = CROSS;
+            array[xj][yj] = B(香);
+        }
+        else
+        {
+            restart = 1;
+        }
+    }
+    //R（角）----------------------------------------
+    else if (array[xi][yi] == R(角))
+    {
+        if (yj > yi && xj < xi)//位於座標右上
+        {
+            for (int i = 1; i < xi-xj+1 ; i ++)
+            {
+                if (array[xi-i][yi+i] != CROSS)
+                    isStandard = 0;//如果初始位置和目标位置之间有棋子，则不符合规则
+           }
+        }
+        if (yj < yi && xj < xi)//位於座標左上
+        {
+            for (int i = 1; i < xi-xj+1 ; i ++)
+            {
+                if (array[xi-i][yi-i] != CROSS)
+                    isStandard = 0;//如果初始位置和目标位置之间有棋子，则不符合规则
+           }
+        }
+        if (yj < yi && xj > xi)//位於座標左下
+        {
+            for (int i = 1; i < xj-xi+1 ; i ++)
+            {
+                if (array[xi+i][yi-i] != CROSS)
+                    isStandard = 0;//如果初始位置和目标位置之间有棋子，则不符合规则
+           }
+        }
+        if (yj > yi && xj > xi)//位於座標右下
+        {
+            for (int i = 1; i < xj-xi+1 ; i ++)
+            {
+                if (array[xi+i][yi+i] != CROSS)
+                    isStandard = 0;//如果初始位置和目标位置之间有棋子，则不符合规则
+           }
+        }
+        if ((abs(xi - xj) == abs(yi - yj))&& isStandard && redOrBlack(xj, yj) != 1)//如果棋子為對角、没有犯规且落点不是红棋，可以移动
+        {
+            array[xi][yi] = CROSS;
+            array[xj][yj] = R(角);
+        }
+        else
+        {
+            restart = 1;
+        }
+    }
+    
+    //B（角）----------------------------------------
+    else if (array[xi][yi] == B(角))
+    {
+        if (yj > yi && xj < xi)//位於座標右上
+        {
+            for (int i = 1; i < xi-xj+1 ; i ++)
+            {
+                if (array[xi-i][yi+i] != CROSS)
+                    isStandard = 0;//如果初始位置和目标位置之间有棋子，则不符合规则
+           }
+        }
+        if (yj < yi && xj < xi)//位於座標左上
+        {
+            for (int i = 1; i < xi-xj+1 ; i ++)
+            {
+                if (array[xi-i][yi-i] != CROSS)
+                    isStandard = 0;//如果初始位置和目标位置之间有棋子，则不符合规则
+           }
+        }if (yj < yi && xj > xi)//位於座標左下
+        {
+            for (int i = 1; i < xj-xi+1 ; i ++)
+            {
+                if (array[xi+i][yi-i] != CROSS)
+                    isStandard = 0;//如果初始位置和目标位置之间有棋子，则不符合规则
+           }
+        }
+        if (yj > yi && xj > xi)//位於座標右下
+        {
+            for (int i = 1; i < xj-xi+1 ; i ++)
+            {
+                if (array[xi+i][yi+i] != CROSS)
+                    isStandard = 0;//如果初始位置和目标位置之间有棋子，则不符合规则
+           }
+        }
+        if ((abs(xi - xj) == abs(yi - yj))&& isStandard && redOrBlack(xj, yj) != -1)//如果棋子為對角、没有犯规且落点不是红棋，可以移动
+        {
+            array[xi][yi] = CROSS;
+            array[xj][yj] = B(角);
+        }
+        else
+        {
+            restart = 1;
+        }
+    }
+    //R（步）----------------------------------------
+    else if (array[xi][yi] == R(步))
+    {
+        if (xi > xj)
+            isStandard = 0;//如果倒退，则不符合规范
+        if ((xi + 1 == xj && yi == yj)&& isStandard && redOrBlack(xj, yj) != 1)//
+        {
+            array[xi][yi] = CROSS;
+            array[xj][yj] = R (步);
+        }
+        else
+        {
+            restart = 1;
+        }
+    }
+    
+    //B（步）----------------------------------------
+    else if (array[xi][yi] == B(步))
+    {
+        if (xi < xj)
+            isStandard = 0;//如果倒退，则不符合规范
+        if ((xi - 1 == xj && yi == yj)&& isStandard && redOrBlack(xj, yj) != -1)//
+        {
+            array[xi][yi] = CROSS;
+            array[xj][yj] = B (步);
+        }
+        else
+        {
+            restart = 1;
+        }
+    }
 
-// TODO: Add different Activation functions
-//void activation_functions()
+    //R（銀）----------------------------------------
+    else if (array[xi][yi] == R(銀))
+    {
+        if (array[xj][yj] != CROSS)
+        {
+            isStandard = 0;//代表有旗子錯誤
+        }
+        if (((xj==xi+1&&yj==yj-1)||(xj==xi+1&&yj==yj)||(xj==xi+1 && yj==yj+1)||(xj==xi-1 && yj==yj-1)||(xj==xi-1 && yj==yj+1)) && isStandard && redOrBlack(xj, yj) != 1)
+        {
+            array[xi][yi] = CROSS;
+            array[xj][yj] = R(銀);
+        }
+        else
+        {
+            restart = 1;
+        }
+    }
+    
+    //B（銀）----------------------------------------
+    else if (array[xi][yi] == B(銀))
+    {
+        if (array[xj][yj] != CROSS)
+        {
+            isStandard = 0;//代表有旗子錯誤
+        }
+        if (((xj==xi-1&&yj==yj-1)||(xj==xi-1&&yj==yj)||(xj==xi-1 && yj==yj+1)||(xj==xi+1 && yj==yj-1)||(xj==xi+1 && yj==yj+1)) && isStandard && redOrBlack(xj, yj) != -1)
+        {
+            array[xi][yi] = CROSS;
+            array[xj][yj] = B(銀);
+        }
+        else
+        {
+            restart = 1;
+        }
+    }
 
-int dinit(void)
-{
-    // TODO:
-    // Free up all the structures
+    //R（金）----------------------------------------
+    else if (array[xi][yi] == R(金))
+    {
+        if (array[xj][yj] != CROSS)
+        {
+            isStandard = 0;//代表有旗子錯誤
+        }
+        if (((xj==xi+1&&yj==yj-1)||(xj==xi+1&&yj==yj)||(xj==xi+1 && yj==yj+1)||(xj==xi-1 && yj==yj-1)||(xj==xi-1 && yj==yj+1)) && isStandard && redOrBlack(xj, yj) != 1)
+        {
+            array[xi][yi] = CROSS;
+            array[xj][yj] = R(金);
+        }
+        else
+        {
+            restart = 1;
+        }
+    }
 
-    return SUCCESS_DINIT;
+    //B（金）----------------------------------------
+    else if (array[xi][yi] == B(金))
+    {
+        if (array[xj][yj] != CROSS)
+        {
+            isStandard = 0;//代表有旗子錯誤
+        }
+        if (((xj==xi-1&&yj==yj-1)||(xj==xi-1&&yj==yj)||(xj==xi-1 && yj==yj+1)||(xj==xi+1 && yj==yj+1)||(xj==xi-1 && yj==yj+1)) && isStandard && redOrBlack(xj, yj) != -1)
+        {
+            array[xi][yi] = CROSS;
+            array[xj][yj] = B(金);
+        }
+        else
+        {
+            restart = 1;
+        }
+    }
+
+    //R（王）----------------------------------------
+    else if (array[xi][yi] == R(王))
+    {
+        if (array[xj][yj] != CROSS)
+        {
+            isStandard = 0;//代表有旗子錯誤
+        }
+        if (((xj==xi+1&&yj==yj-1)||(xj==xi+1&&yj==yj)||(xj==xi+1 && yj==yj+1)||(xj==xi-1 && yj==yj-1)||(xj==xi-1 && yj==yj+1||(xj==xi-1 && yj==yj||(xj==xi && yj==yj-1)||(xj==xi && yj==yj+1)))) && isStandard && redOrBlack(xj, yj) != 1)
+        {
+            array[xi][yi] = CROSS;
+            array[xj][yj] = R(王);
+        }
+        else
+        {
+            restart = 1;
+        }
+    }
+
+    //B（王）----------------------------------------
+    else if (array[xi][yi] == B(王))
+    {
+        if (array[xj][yj] != CROSS)
+        {
+            isStandard = 0;//代表有旗子錯誤
+        }
+        if (((xj==xi+1&&yj==yj-1)||(xj==xi+1&&yj==yj)||(xj==xi+1 && yj==yj+1)||(xj==xi-1 && yj==yj-1)||(xj==xi-1 && yj==yj+1||(xj==xi-1 && yj==yj||(xj==xi && yj==yj-1)||(xj==xi && yj==yj+1)))) && isStandard && redOrBlack(xj, yj) != -1)
+        {
+            array[xi][yi] = CROSS;
+            array[xj][yj] = R(王);
+        }
+        else
+        {
+            restart = 1;
+        }
+    }
 }
